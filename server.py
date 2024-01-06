@@ -29,5 +29,5 @@ def select_file():
     return root.filename
 
 if __name__ == "__main__":
-    ftp_server = FTPServer('127.0.0.1', 22)
+    ftp_server = FTPServer('127.0.0.1', 21)
     threading.Thread(target=ftp_server.start).start()
