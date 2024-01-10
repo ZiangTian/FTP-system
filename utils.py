@@ -41,18 +41,28 @@ def create_data_socket(data_address):
 # control socket can be directly created using ftp_connect
 
 # RETR wrapped
-def receive_file(control_socket, data_socket, filename):
+def receive_file(control_socket, data_address, filename):
     """
     从服务器下载文件，输入控制socket，数据socket，要下载的文件名，下载到当前目录下
     """
-    send_command(control_socket, f"RETR {filename}\r\n")
-    with open(filename, 'wb') as file:
-        while True:
-            data = data_socket.recv(4096)
-            if not data:
-                break
-            file.write(data)
-    return data
+    # pasv_response = send_command(control_socket, 'PASV\r\n')
+    # data_address = parse_pasv_response(pasv_response)
+    
+    if data_address:
+        print(f"Data connection address for receive: {data_address}")
+        data_socket = create_data_socket(data_address)
+        send_command(control_socket, f"RETR {filename}\r\n")
+        with open(filename, 'wb') as file:
+            while True:
+                data = data_socket.recv(4096)
+                if not data:
+                    break
+                file.write(data)
+        data_socket.close()
+        return data
+    
+    else:
+        print("Failed to receive, Error parsing PASV response")
 
 # resumable file transfer
 def re_receive_file(control_socket, data_socket, filename, offset=0):
@@ -83,26 +93,40 @@ def re_receive_file(control_socket, data_socket, filename, offset=0):
 
 
 # LIST wrapped
-def list_file(control_socket, data_socket):
+def list_file(control_socket, data_address):
     """
     打印出在服务器当前目录下的文件和目录
     
     输入控制socket，数据socket
     """
-    send_command(control_socket, f'NLST\r\n')
-    data = data_socket.recv(4096)
-    while True:
-        data = data_socket.recv(4096)
-        if not data:
-            break
-        print(data.decode('utf-8'))
+    # pasv_response = send_command(control_socket, 'PASV\r\n')
+    # data_address = parse_pasv_response(pasv_response)
+    
+    if data_address:
+        print(f"Data connection address for list: {data_address}")
+        data_socket = create_data_socket(data_address)
+        send_command(control_socket, f'LIST\r\n')
+
+        received_data = b''
+        # data = data_socket.recv(4096)
+        while True:
+            data = data_socket.recv(4096)
+            if not data:
+                break
+            received_data += data
+            print(received_data)
+        data_socket.close()
+        return received_data
+    else:
+        print("Failed to list. Error parsing PASV response")
+
+
     # with open(filename, 'wb') as file:
     #     while True:
     #         data = data_socket.recv(4096)
     #         if not data:
     #             break
     #         file.write(data)
-    return data
 
 # send commands
 def send_command(control_socket, command):
@@ -111,7 +135,7 @@ def send_command(control_socket, command):
     """
     control_socket.sendall(command.encode('utf-8'))
     response = control_socket.recv(4096)
-    print(response.decode('utf-8'))
+    print(command, " says ",response.decode('utf-8'))
     return response
 
 # CWD wrapped
@@ -134,17 +158,27 @@ def quit(control_socket):
     control_socket.close()
 
 # Upload wrapped
-def upload(control_socket, data_socket, filename):
+def upload(control_socket, data_address, filename):
     """
     上传文件到FTP服务器
     
-    输入控制socket，数据socket，要上传的文件名
+    输入控制socket，数据address，要上传的文件名
     """
-    send_command(control_socket, f'STOR {filename}\r\n')
-    with open(filename, 'rb') as file:
-        while True:
-            data = file.read(4096)
-            if not data:
-                break
-            data_socket.sendall(data)
-    return data
+    pasv_response = send_command(control_socket, 'PASV\r\n')
+    data_address = parse_pasv_response(pasv_response)
+
+    if data_address:
+        print(f"Data connection address for upload: {data_address}")
+        data_socket = create_data_socket(data_address)
+        send_command(control_socket, f'STOR {filename}\r\n')
+        with open(filename, 'rb') as loc_file:
+            data = loc_file.read(4096)
+            while data:
+                data_socket.sendall(data)
+                data = loc_file.read(4096)
+
+        data_socket.close()
+        response = control_socket.recv(4096)
+        print(response.decode('utf-8'))
+    else:
+        print("Failed to upload. Error parsing PASV response")
