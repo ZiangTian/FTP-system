@@ -21,6 +21,29 @@ class FTPClientGUI:
         # self.parse_pasv_response = parse_pasv_response
         # self.change_directory = change_directory
         self.create_widgets()
+    
+    def login_ftp(self):
+        host = tk.simpledialog.askstring("Input", "Enter host:") # '10.128.22.12' 
+        port = tk.simpledialog.askinteger("Input", "Enter port:") # 21
+        username = tk.simpledialog.askstring("Input", "Enter username:") # FtpUsr
+        password = tk.simpledialog.askstring("Input", "Enter password:")  # 654321
+
+        self.control_socket = self.ftp_connect(host, port)
+
+        if self.control_socket:
+            send_command(self.control_socket, 'USER {}\r\n'.format(username))
+            response = send_command(self.control_socket, 'PASS {}\r\n'.format(password))
+            if response.decode('utf-8').startswith('530'):
+                self.text_area.insert(tk.END, "Login failed. Please check your credentials.\n")
+                # self.control_socket.close()
+            else:
+                self.text_area.insert(tk.END, "Login successful. Connected to FTP server.\n")
+                # Enable other buttons after successful login
+                # self.connect_button["state"] = tk.NORMAL
+                self.upload_button["state"] = tk.NORMAL
+                self.download_button["state"] = tk.NORMAL
+        else:
+            self.text_area.insert(tk.END, "Login failed. Please check your credentials.\n")
 
     def ftp_connect(self, host, port):
         control_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -30,11 +53,14 @@ class FTPClientGUI:
         return control_socket
     
     def create_widgets(self):
-        self.text_area = scrolledtext.ScrolledText(self.master, wrap=tk.WORD, width=50, height=20)
+        self.text_area = scrolledtext.ScrolledText(self.master, wrap=tk.WORD, width=80, height=40)
         self.text_area.pack(padx=10, pady=10)
 
-        self.connect_button = tk.Button(self.master, text="Connect", command=self.connect_ftp)
-        self.connect_button.pack(pady=5)
+        self.login_button = tk.Button(self.master, text="Login", command=self.login_ftp)
+        self.login_button.pack(pady=5)
+
+        # self.connect_button = tk.Button(self.master, text="Connect", command=self.connect_ftp)
+        # self.connect_button.pack(pady=5)
 
         self.list_button = tk.Button(self.master, text="List Files", command=self.list_files)
         self.list_button.pack(pady=5)
@@ -48,16 +74,27 @@ class FTPClientGUI:
         self.quit_button = tk.Button(self.master, text="Quit", command=self.master.destroy)
         self.quit_button.pack(pady=5)
 
-    def connect_ftp(self):
-        host = '10.128.22.12' 
-        port = 21
+    # def connect_ftp(self):
+    #     host = '10.128.22.12' 
+    #     port = 21
 
-        self.control_socket = self.ftp_connect(host, port)
+    #     self.control_socket = self.ftp_connect(host, port)
+
+    #     if self.control_socket:
+    #         send_command(self.control_socket, 'USER FtpUsr\r\n')
+    #         send_command(self.control_socket, 'PASS 654321\r\n')
+    #         self.text_area.insert(tk.END, "Login successful. Connected to FTP server.\n")
+    #         # Enable other buttons after successful login
+    #         self.connect_button["state"] = tk.NORMAL
+    #         self.upload_button["state"] = tk.NORMAL
+    #         self.download_button["state"] = tk.NORMAL
+    #     else:
+    #         self.text_area.insert(tk.END, "Login failed. Please check your credentials.\n")
+
         
-        send_command(self.control_socket, 'USER FtpUsr\r\n')
-        send_command(self.control_socket, 'PASS 654321\r\n')
 
-        self.text_area.insert(tk.END, "Connected to FTP server.\n")
+
+        self.text_area.insert(tk.END, "Welcome to FTP server. This is the group work for WHU computer network lab.\n")
 
     def list_files(self):
         pasv_response = send_command(self.control_socket, 'PASV\r\n')
@@ -127,48 +164,44 @@ class FTPClientGUI:
             self.text_area.insert(tk.END, "Not connected to FTP server. Please connect first.\n")
 
     def download_file(self):
-            remote_filename = self.remote_file_path.get()
+        if self.control_socket:
+            remote_filename = tk.simpledialog.askstring("Input", "Enter remote filename:")
             if remote_filename:
-                local_filename = filedialog.asksaveasfilename(title="Select Save Location")
-                if local_filename:
-                    # Get the data address for the data connection
-                    pasv_response = send_command(self.control_socket, 'PASV\r\n')
-                    data_address = parse_pasv_response(pasv_response)
+                # Get the data address for the data connection
+                time.sleep(0.2)
+                pasv_response = send_command(self.control_socket, 'PASV\r\n')
+                data_address = parse_pasv_response(pasv_response)
 
-                    if data_address:
-                        # Create a data socket and connect to the specified address
-                        data_socket = create_data_socket(data_address)
+                if data_address:
+                    # Create a data socket and connect to the specified address
+                    data_socket = create_data_socket(data_address)
 
-                        # Download the remote file from the server
-                        self.download_file_operation(data_socket, local_filename, remote_filename)
+                    # Send the RETR command with the remote filename
+                    send_command(self.control_socket, f"RETR {remote_filename}\r\n")
 
-                        # Close the data socket
-                        data_socket.close()
-                    else:
-                        self.text_area.insert(tk.END, "Error parsing PASV response\n")
+                    # Open the local file for writing
+                    local_filename = os.path.join(os.getcwd(), remote_filename)
+                    with open(local_filename, 'wb') as local_file:
+                        while True:
+                            data = data_socket.recv(4096)
+                            if not data:
+                                break
+                            local_file.write(data)
+
+                    # Close the data socket to signal the end of file download
+                    data_socket.close()
+
+                    # Wait for the server response after download
+                    response = self.control_socket.recv(4096)
+                    self.text_area.insert(tk.END, response.decode('utf-8') + "\n")
+
                 else:
-                    self.text_area.insert(tk.END, "Please select a local save location.\n")
+                    self.text_area.insert(tk.END, "Error parsing PASV response\n")
             else:
                 self.text_area.insert(tk.END, "Please enter a remote filename.\n")
+        else:
+            self.text_area.insert(tk.END, "Not connected to FTP server. Please connect first.\n")
 
-    def download_file_operation(self, data_socket, local_filename, remote_filename):
-            # Send the RETR command to the server
-            send_command(self.control_socket, f"RETR {remote_filename}\r\n")
-
-            # Open the local file for writing
-            with open(local_filename, 'wb') as local_file:
-                while True:
-                    data = data_socket.recv(4096)
-                    if not data:
-                        break
-                    local_file.write(data)
-
-            # Close the data socket to signal the end of file download
-            data_socket.close()
-
-            # Wait for the server response after download
-            response = self.control_socket.recv(4096)
-            self.text_area.insert(tk.END, response.decode('utf-8') + "\n")
 
 
 def create_data_socket(data_address):
@@ -178,7 +211,7 @@ def create_data_socket(data_address):
 
 def send_command(control_socket, command):
     control_socket.sendall(command.encode('utf-8'))
-    if command ==  :time.sleep(0.5)
+    if command == 'PASV\r\n': time.sleep(0.2)
     response = control_socket.recv(4096)
     return response
 
