@@ -1,57 +1,53 @@
 import socket
-import os
-from tkinter import Tk, filedialog
+import re
 
-class FTPClient:
-    def __init__(self, server_host, server_port):
-        self.server_host = server_host
-        self.server_port = server_port
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.connected = False
+from utils import ftp_connect, create_data_socket, send_command, receive_file, list_file, parse_pasv_response, change_directory
 
-    def connect(self):
-        try:
-            self.client_socket.connect((self.server_host, self.server_port))
-            self.connected = True
-            print("Connected to FTP server")
-        except Exception as e:
-            print(f"Error connecting to FTP server: {e}")
-
-    def disconnect(self):
-        self.client_socket.close()
-        self.connected = False
-        print("Disconnected from FTP server")
-    def upload_file(self, local_path, remote_path):
-        if not self.connected:
-            print("Not connected to FTP server. Please connect first.")
-            return
-
-        try:
-            with open(local_path, 'rb') as file:
-                file_data = file.read()
-                self.client_socket.sendall(file_data)
-            print(f"File {os.path.basename(local_path)} uploaded successfully.")
-        except FileNotFoundError:
-            print(f"Error: File not found - {local_path}")
-        except Exception as e:
-            print(f"Error uploading file: {e}")
-
-
-def select_file():
-    root = Tk()
-    root.filename = filedialog.askopenfilename(initialdir="/", title="Select file",
-                                               filetypes=(("All files", "*.*"),))
-    root.destroy()
-    return root.filename
 
 if __name__ == "__main__":
-    ftp_client = FTPClient('127.0.0.1', 21)
-    ftp_client.connect()
+    host = '10.128.22.12'  
+    port = 21
 
-    local_file_path = select_file()
-    if local_file_path:
-        remote_file_path = input("Enter the remote file path on the server: ")
-        ftp_client.upload_file(local_file_path, remote_file_path)
+    control_socket = ftp_connect(host, port)
 
-    ftp_client.disconnect()
+    # Replace 'USERNAME' and 'PASSWORD' with your FTP server credentials
+    send_command(control_socket, 'USER FtpUsr\r\n')
+    send_command(control_socket, 'PASS 654321\r\n')
 
+    pasv_response = send_command(control_socket, 'PASV\r\n')
+    # data_address = parse_pasv_response(pasv_response.decode('utf-8'))
+    data_address = parse_pasv_response(pasv_response)
+    
+    if data_address:
+        print(f"Data connection address: {data_address}")
+        data_socket = create_data_socket(data_address)
+        change_directory(control_socket, 'books')
+        
+        # file_listing_filename = 'file_listing.txt'
+    
+        # with open(file_listing_filename, 'wb') as file:
+        #     while True:
+        #         data = data_socket.recv(4096)
+        #         if not data:
+        #             break
+        #         file.write(data)
+        print(list_file(control_socket, data_socket))
+
+        receive_file(control_socket, data_socket, 'riscv-privileged-v1.10.pdf')
+        data = data_socket.recv(4096)
+        print(data)
+
+        data_socket.close()
+    else:
+        print("Error parsing PASV response")
+    
+    # Example: Change to the directory 'example_directory'
+    # send_command(control_socket, 'CWD example_directory\r\n')
+
+    # # Example: List files in the current directory
+    # send_command(control_socket, 'LIST\r\n')
+
+    # # Example: Download a file named 'example.txt'
+    # send_command(control_socket, 'RETR riscv-privileged-v1.10.pdf\r\n')
+
+    control_socket.close()
