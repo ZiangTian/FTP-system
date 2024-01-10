@@ -174,7 +174,10 @@ class FTPClientGUI:
                     send_command(self.control_socket, f"RETR {remote_filename}\r\n")
 
                     # Open the local file for writing
-                    local_filename = os.path.join(os.getcwd(), remote_filename)
+                    local_folder = os.path.join(os.getcwd(), 'downloads')
+                    os.makedirs(local_folder, exist_ok=True)
+                    local_filename = os.path.join(local_folder, remote_filename)
+                    
                     with open(local_filename, 'wb') as local_file:
                         while True:
                             data = data_socket.recv(4096)
