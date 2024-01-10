@@ -13,13 +13,6 @@ class FTPClientGUI:
     def __init__(self, master):
         self.master = master
         self.master.title("FTP Client")
-        # self.local_file_path = tk.StringVar()
-        # self.remote_file_path = tk.StringVar()
-        # self.create_data_socket = create_data_socket
-        # self.receive_file = receive_file
-        # self.list_file = list_file
-        # self.parse_pasv_response = parse_pasv_response
-        # self.change_directory = change_directory
         self.create_widgets()
     
     def login_ftp(self):
@@ -46,11 +39,15 @@ class FTPClientGUI:
             self.text_area.insert(tk.END, "Login failed. Please check your credentials.\n")
 
     def ftp_connect(self, host, port):
-        control_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        control_socket.connect((host, port))
-        response = control_socket.recv(4096)
-        self.text_area.insert(tk.END, f"{response.decode('utf-8')}\n")
-        return control_socket
+        try:
+            control_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            control_socket.connect((host, port))
+            response = control_socket.recv(4096)
+            self.text_area.insert(tk.END, f"{response.decode('utf-8')}\n")
+            return control_socket
+        except Exception as e:
+            self.text_area.insert(tk.END, f"Error connecting to FTP server: {e}\n")
+            return None
     
     def create_widgets(self):
         self.text_area = scrolledtext.ScrolledText(self.master, wrap=tk.WORD, width=80, height=40)
@@ -58,9 +55,6 @@ class FTPClientGUI:
 
         self.login_button = tk.Button(self.master, text="Login", command=self.login_ftp)
         self.login_button.pack(pady=5)
-
-        # self.connect_button = tk.Button(self.master, text="Connect", command=self.connect_ftp)
-        # self.connect_button.pack(pady=5)
 
         self.list_button = tk.Button(self.master, text="List Files", command=self.list_files)
         self.list_button.pack(pady=5)
@@ -73,25 +67,6 @@ class FTPClientGUI:
 
         self.quit_button = tk.Button(self.master, text="Quit", command=self.master.destroy)
         self.quit_button.pack(pady=5)
-
-    # def connect_ftp(self):
-    #     host = '10.128.22.12' 
-    #     port = 21
-
-    #     self.control_socket = self.ftp_connect(host, port)
-
-    #     if self.control_socket:
-    #         send_command(self.control_socket, 'USER FtpUsr\r\n')
-    #         send_command(self.control_socket, 'PASS 654321\r\n')
-    #         self.text_area.insert(tk.END, "Login successful. Connected to FTP server.\n")
-    #         # Enable other buttons after successful login
-    #         self.connect_button["state"] = tk.NORMAL
-    #         self.upload_button["state"] = tk.NORMAL
-    #         self.download_button["state"] = tk.NORMAL
-    #     else:
-    #         self.text_area.insert(tk.END, "Login failed. Please check your credentials.\n")
-
-        
 
 
         self.text_area.insert(tk.END, "Welcome to FTP server. This is the group work for WHU computer network lab.\n")
@@ -111,7 +86,7 @@ class FTPClientGUI:
                     break
                 received_data += data
 
-            file_encoding = 'utf-8'  # Replace with the correct encoding
+            file_encoding = 'utf-8' 
             decoded_data = received_data.decode(file_encoding)
 
             self.text_area.insert(tk.END, f"File Listing:\n{decoded_data}\n")
